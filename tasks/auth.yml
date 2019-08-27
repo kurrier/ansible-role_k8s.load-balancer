@@ -1,0 +1,37 @@
+---
+
+- name: k8s add credentials
+  include_vars: "{{ ansible_vault }}/k8s_auth.yml"
+  no_log: true
+  run_once: true
+  delegate_to: localhost
+  when:
+    - k8s_function_encrypt is defined and k8s_function_encrypt|bool
+
+- name: k8s getting remote location
+  shell: "echo ~"
+  register: k8s_user_home
+  delegate_to: "{{ k8s_client }}"
+  run_once: true
+
+- name: k8s temp create
+  file:
+    path: "{{ k8s_remote_temp }}"
+    state: directory
+  delegate_to: "{{ k8s_client }}"
+  run_once: true
+  register: k8s_temp_create
+  when: k8s_user_home is success
+
+- name: k8s generate kubeconfig
+  template:
+    src: templates/kubeconfig.j2
+    dest: "{{ k8s_remote_temp }}/kubeconfig"
+  delegate_to: "{{ k8s_client }}"
+  run_once: true
+  register: k8s_temp_config
+  when: k8s_temp_create is success
+
+- set_fact:
+    KUBECONFIG="{{ k8s_remote_temp }}/kubeconfig"
+  when: k8s_temp_config is success

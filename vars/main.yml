@@ -1,0 +1,11 @@
+---
+# vars file for k8s.load-balancer
+
+k8s_default_config: "{{ lookup('env','HOME') }}/.kube/config"
+
+k8s_remote_temp: "{{ k8s_user_home.stdout }}/.ansible/k8s"
+
+
+msg_subject: "Ansible Load Balance"
+msg_footer: "Kubernetes"
+msg_footer_icon: ""

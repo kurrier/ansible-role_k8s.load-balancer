@@ -1,0 +1,8 @@
+---
+
+- name: k8s ansible temp file cleanup
+  file:
+    path: "{{ k8s_remote_temp }}"
+    state: absent
+  delegate_to: "{{ k8s_client }}"
+  run_once: true

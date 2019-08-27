@@ -1,0 +1,103 @@
+---
+# tasks file for k8s.load-balancer
+
+- name: set version
+  shell: "uuidgen -r | cut -c1-8"
+  register: k8s_uuid
+  delegate_to: localhost
+  run_once: true
+  when: k8s_function_msg is defined and k8s_function_msg|bool
+
+- set_fact:
+    msg_job_time: "{{ lookup('pipe', 'date +%s') }}"
+    msg_job_uuid: "{{ k8s_uuid.stdout }}"
+  when: k8s_function_msg is defined and k8s_function_msg|bool
+
+- name: k8s auth configure
+  include_tasks: auth.yml
+  when: k8s_auth is defined and k8s_auth|bool
+
+- set_fact:
+    KUBECONFIG: "{{ k8s_default_config }}"
+  when: k8s_auth is not defined
+
+- name: k8s activate node
+  block:
+    - name: k8s uncordon node
+      shell: "kubectl uncordon {{ ansible_hostname }}"
+      environment:
+        KUBECONFIG: "{{ KUBECONFIG }}"
+      register: k8s_active
+      delegate_to: "{{ k8s_client }}"
+
+  always:
+    - set_fact:
+        k8s_check: true
+
+  when: k8s_state is defined and k8s_state == "active"
+
+- name: k8s drain node
+  block:
+    - name: k8s drain node
+      shell: "kubectl drain {{ ansible_hostname }} --ignore-daemonsets"
+      environment:
+        KUBECONFIG: "{{ KUBECONFIG }}"
+      register: k8s_drain
+      delegate_to: "{{ k8s_client }}"
+
+  always:
+    - set_fact:
+        k8s_check: true
+
+  when: k8s_state is defined and k8s_state == "drain"
+
+- name: k8s node status
+  block:
+    - name: k8s get node status
+      shell: "kubectl get node {{ ansible_hostname }} | awk '{print $2}' | tail -n1"
+      environment:
+        KUBECONFIG: "{{ KUBECONFIG }}"
+      register: k8s_check_test
+      failed_when: k8s_check_test.stdout != "Ready"
+      delegate_to: "{{ k8s_client }}"
+      when: KUBECONFIG is defined
+
+    - set_fact:
+        msg_alert_lvl: 3
+      when: k8s_function_msg is defined and k8s_function_msg|bool
+
+  rescue:
+    - set_fact:
+        msg_alert_lvl: 2
+      when: k8s_function_msg is defined and k8s_function_msg|bool
+
+    - debug: msg="{{ k8s_check_test.stderr }}"
+      when: k8s_check_test.stderr|length > 0
+
+    - set_fact:
+        k8s_host_fail: true
+      when: k8s_check_test.stderr|length > 0
+
+  always:
+    - name: k8s node ready?
+      debug: msg="{{ k8s_check_test.stdout }}"
+      when: k8s_host_fail is not defined
+
+    - set_fact:
+        k8s_health: "{{ k8s_check_test.stdout }}"
+      when: k8s_host_fail is not defined
+
+  when: k8s_check is defined and k8s_check|bool
+
+- set_fact:
+    msg_alert_title: "K8s Cluster Health"
+    msg_alert_url: ""
+    msg_alert_txt: "Node: {{ ansible_hostname }} status is {{ k8s_health }}"
+    msg_alert_body: "Node: {{ ansible_hostname }} status is {{ k8s_health }}"
+  when:
+    - k8s_health is defined
+    - k8s_function_msg is defined and k8s_function_msg|bool
+
+- name: k8s cleanup
+  include_tasks: cleanup.yml
+  when: k8s_auth is defined and k8s_auth|bool
