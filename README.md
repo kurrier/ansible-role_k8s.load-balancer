@@ -6,7 +6,7 @@ Kubernetes Node Control and Health Status Check
 Requirements
 ------------
 
-N/A
+kubectl
 
 Role Variables
 --------------
@@ -27,8 +27,6 @@ Role Variables
 
 Dependecies
 -----------
-
-kubectl installed
 
 kurrier.alerts - if want to use alerts
 
